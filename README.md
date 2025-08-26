@@ -1,24 +1,30 @@
-这是一个为 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 设计的功能完善、高度可配置的表情包制作与图片处理插件。它通过调用 [meme-generator](https://github.com/MemeCrafters/meme-generator) 服务，为您的机器人带来无穷的乐趣。
+# AstrBot 表情包制作 & 图片工具插件 (Meme Maker API)
+
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![AstrBot](https://img.shields.io/badge/AstrBot-v3.5+-green.svg)
+![Version](https://img.shields.io/badge/plugin--version-5.1.0-blue)
+
+这是一款为 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 设计的功能强大、高度模块化的表情包制作与图片处理插件。它通过连接后端 API 服务（如 [Meme-Generator](https://github.com/MeetWq/meme-generator)），为您的聊天机器人带来无穷的乐趣和实用性。
 
 ## ✨ 功能特性
 
 - **强大的表情制作**：
   - **关键词触发**：通过发送 `-关键词 + 图片/文字/@某人` 即可生成表情。
-  - **默认文本**：对于“为所欲为”等需要大量文字的表情，不提供文字时会自动使用经典台词。
+  - **默认文本**：对于“为所欲为”等需要大量文字的表情，不提供文字时会自动使用经典台词(如果有)。
   - **智能交互**：当所需参数不足时，会自动进入等待模式，提示用户补充，并可通过 `-取消` 随时终止。
-  - **选项参数**：支持 `--圆` 这样的命令行风格选项，对生成的图片进行微调。
+  - **选项参数**：支持 `-摸 @QQ -c` 这样的参数选项，对生成的图片进行微调。
 
 - **丰富的图片工具**：
   - 内置多达13种图片处理工具，包括水平/竖直翻转、旋转、缩放、裁剪、灰度、反色、横向/纵向拼接，以及GIF分解、合成、倒放、变速。
 
 - **完善的信息查询**：
   - **表情列表**：通过 `-表情列表` 获取图文并茂的可用表情总览。
-  - **表情详情**：通过 `-表情详情 <关键词>` 查看指定表情的详细用法和预览图。
+  - **表情详情**：通过 `-表情详细 <关键词>` 查看指定表情的详细用法和预览图。
   - **表情搜索**：通过 `-表情搜索 <关键词>` 查找表情，支持交互式翻页。
 
 - **高级权限系统**：
-  - **四级权限**：集成了“超管 > 群主 > QQ管理员 > 手动插件管理员 > 普通成员”的多级权限体系。
-  - **后台可配**：可在后台为每个管理指令单独配置所需的权限等级。
+  - **多级权限**：集成了“超管 > 群主 > QQ管理员 > 手动插件管理员 > 普通成员”的多级权限体系。
+  - **后台可配**：可在后台为部分管理指令单独配置所需的权限等级。
   - **手动授权**：超管可通过 `-群管理员` 指令，将插件的管理权限精准授予普通成员，而无需给予其真正的群管理员身份。
 
 - **极致的用户体验**：
@@ -29,7 +35,15 @@
 - **详细的数据统计**：
   - 支持通过自然语言查询，如 `-我的本周表情调用统计`，生成精美的统计图表。
 
-## 🚀 安装与部署
+## 🚀 安装
+
+### 方式一：自动部署（推荐）
+
+1. **通过 AstrBot 插件市场安装**  
+   在 AstrBot WebUI 后台，进入“插件市场”，搜索 `meme_maker_api`，一键安装即可。  
+   安装完成后，直接进入“插件管理”进行配置。
+
+### 方式二：手动部署
 
 1.  **下载插件**: 将本项目文件夹放置于 AstrBot 的 `data/plugins/` 目录下。
 
@@ -38,14 +52,15 @@
     pip install aiohttp aiosqlite pydantic python-dateutil filetype
     ```
 
-3.  **部署前置服务 (重要！)**:
-    * **meme-generator 服务**: 本插件是Meme-API的前端，您必须先部署 [meme-generator](https://github.com/MemeCrafters/meme-generator)，并确保您的机器人可以访问到它的地址。
-    * **Napcat/go-cqhttp 服务(可选)**: 本插件的“消息撤回”功能依赖于直连 Napcat 的 HTTP API。您需要部署并运行一个兼容 OneBot v11 标准的客户端。
+## 🌏 部署前置服务 (重要！)
 
-4.  **配置插件**:
+1.  **部署meme-generator**:
+    * **meme-generator 服务**: 本插件是 Meme-API 的前端，您必须先部署 [meme-generator](https://github.com/MemeCrafters/meme-generator)，并确保您的机器人可以访问到它的地址。
+
+2.  **配置插件**:
     * 启动 AstrBot，前往 WebUI -> 插件管理，找到 `meme_maker_api` 插件。
     * 点击“配置”，填入您的 **Meme-API 地址**。
-    * 如果您希望启用“消息撤回”功能，请**开启开关**，并填入您的 **Napcat HTTP API 地址**。
+    * 如果您希望启用“消息撤回”功能，请**开启
 
 ## 📖 使用说明
 
@@ -68,12 +83,12 @@
   > `-摸 @小助手 -圆`
   > (制作一张圆形的“摸”@小助手头像的表情)
 
-  > (回复一张图片)
-  > `-画画`
-  > (将回复的图片作为素材制作“画画”表情)
+  > (引用一张图片)
+  > `-拍`
+  > (将回复的图片作为素材制作“拍”表情)
   
-  > `-赞美 编码助手你真棒`
-  > (制作需要一段文字的“赞美”表情)
+  > `-举牌 你是谁来着？`
+  > (制作需要一段文字的“举牌”表情)
 
 #### **使用默认台词**
 对于需要大量文字的表情（如“为所欲为”），如果不提供任何文字，插件会自动使用内置的经典台词。
@@ -156,29 +171,55 @@
 - `-全局禁用表情 <关键词>`: 将表情设为全局白名单模式（默认禁用，需分群启用）。
 - `-全局启用表情 <关键词>`: 将表情恢复为全局黑名单模式（默认启用）。
 
+### 💟 更多指令 (因为暂时没时间写README所以就先到这儿吧)
+
 ## ⚙️ 配置项说明
 
 所有配置项均可在 AstrBot 后台 WebUI 中进行图形化配置。
 
 | 配置项 | 类型 | 说明 | 默认值 |
 | :--- | :--- | :--- | :--- |
-| `recall_settings.enabled` | 开关 | 是否启用“提示消息自动撤回”功能。 | `False` (关闭) |
-| `recall_settings.napcat_base_url`| 文本 | Napcat HTTP API 的地址，用于实现撤回。 | `http://127.0.0.1:3000` |
-| `meme_generator_base_url` | 文本 | Meme-API 服务的地址。 | `http://127.0.0.1:2233` |
-| `timeout` | 数字 | 访问 Meme-API 的网络超时时间（秒）。 | `20` |
-| `command_prefix` | 文本 | 本插件的指令前缀。 | `-` |
-| `bot_display_name` | 文本 | 在合并转发消息中显示的机器人昵称。 | `Meme Bot` |
-| `multi_image_options.direct_send_threshold`| 数字 | 图片数 <= 此值时，直接发送。 | `3` |
-| `multi_image_options.send_forward_msg`| 开关 | 图片数 > 直接发送阈值时，是否用合并转发。 | `True` (开启) |
-| `multi_image_options.send_as_zip_enabled`| 开关 | 图片数 > 压缩包阈值时，是否打包为zip。 | `True` (开启) |
-| `multi_image_options.zip_threshold` | 数字 | 触发压缩包发送的图片数量阈值。 | `20` |
-| `session_timeout` | 数字 | 等待用户补充参数的超时时间（秒）。 | `60` |
-| `use_sender_when_no_image` | 开关 | 无图时是否自动使用发送者头像。 | `True` (开启) |
-| `fuzzy_match` | 开关 | 是否启用表情关键词模糊匹配。 | `True` (开启) |
-| `perms.handle_...` | 下拉菜单 | 各个管理指令所需的最低权限等级。 | - |
+| `meme_generator_base_url` | 文本 | 【重要】Meme制作器API地址，需以`/`结尾 | `http://127.0.0.1:2233/` |
+| `timeout` | 数字 | 网络请求超时（秒） | `20` |
+| `command_prefix` | 文本 | 插件指令专属前缀 | `-` |
+| `bot_display_name` | 文本 | 合并转发中显示的机器人昵称 | `Meme Bot` |
+| `interactive_settings.enabled` | 开关 | 启用交互式等待 | `True` (开启) |
+| `interactive_settings.timeout` | 数字 | 等待用户补充参数的超时时间（秒） | `60` |
+| `interactive_settings.recall.enabled` | 开关 | 启用提示消息自动撤回 | `False` (关闭) |
+| `interactive_settings.smart_reprompt.enabled` | 开关 | 智能重提示 | `False` (关闭) |
+| `interactive_settings.smart_reprompt.threshold` | 数字 | 触发重提示的无效输入次数 | `2` |
+| `multi_image_options.direct_send_threshold` | 数字 | 直接发送图片数量阈值 | `3` |
+| `multi_image_options.send_forward_msg` | 开关 | 超过阈值时启用合并转发 | `True` (开启) |
+| `multi_image_options.send_as_zip_enabled` | 开关 | 超过阈值时启用zip打包 | `True` (开启) |
+| `multi_image_options.zip_threshold` | 数字 | 触发zip打包的图片数量阈值 | `20` |
+| `multi_image_options.zip_use_base64` | 开关 | 使用Base64方式发送zip包 | `False` (关闭) |
+| `use_sender_when_no_image` | 开关 | 无图时自动使用发送者头像 | `True` (开启) |
+| `fuzzy_match` | 开关 | 启用表情关键词模糊匹配 | `True` (开启) |
+| `label_settings.label_new_days` | 数字 | “新”表情标签显示天数 | `7` |
+| `label_settings.label_hot_days` | 数字 | “热门”表情统计周期（天） | `30` |
+| `label_settings.label_hot_threshold` | 数字 | “热门”表情使用次数阈值 | `20` |
+| `perms.handle_refresh_memes` | 下拉 | 刷新表情 指令权限 | `超管` |
+| `perms.handle_disable_meme` | 下拉 | 禁用表情 指令权限 | `管理员` |
+| `perms.handle_enable_meme` | 下拉 | 启用表情 指令权限 | `管理员` |
+| `perms.handle_manager_list` | 下拉 | 管理列表 指令权限 | `超管` |
+| `perms.handle_group_admin_manager` | 下拉 | 群管理员 指令权限 | `超管` |
+| `perms.handle_global_disable_meme` | 下拉 | 全局禁用表情 指令权限 | `超管` |
+| `perms.handle_global_enable_meme` | 下拉 | 全局启用表情 指令权限 | `超管` |
+
+> 更多详细说明请参考插件目录下的 `_conf_schema.json` 文件。
+
+## 常见问题（FAQ）
+
+- **Q: 插件无法连接 meme-generator 服务怎么办？**
+  - 请检查 meme-generator 服务是否已启动，并确保 `meme_generator_base_url` 配置正确可访问。
+- **Q: 图片生成失败，提示“参数不足”？**
+  - 请根据提示补充所需的图片或文字参数，或使用 `-取消` 终止当前操作。
+- **Q: 如何查看详细日志？**
+  - 请在 AstrBot 的控制台查找 `meme_maker_api` 相关日志输出。
 
 ## 致谢
 
+* 本插件基于强大且易用的 [AstrBot](https://docs.astrbot.app/) 框架开发，感谢 AstrBot 团队为开源社区带来的高效机器人平台。
 * 本插件的功能设计，深度参考了优秀的 [nonebot-plugin-memes-api](https://github.com/MemeCrafters/nonebot-plugin-memes-api) 项目。
 * 权限系统的设计，学习并改造了 [astrbot_plugin_QQAdmin](https://github.com/Zhalslar/astrbot_plugin_QQAdmin) 的实现。
 * 核心依赖于 [meme-generator](https://github.com/MemeCrafters/meme-generator) 服务。
