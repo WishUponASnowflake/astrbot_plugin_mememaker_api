@@ -1,0 +1,194 @@
+{
+  "meme_generator_base_url": {
+    "type": "string",
+    "description": "【重要】Meme制作器API地址",
+    "default": "http://127.0.0.1:2233/",
+    "hint": "请确保您的Meme-API服务正在此地址运行，并以'/'结尾",
+    "obvious_hint": true
+  },
+  "timeout": {
+    "type": "int",
+    "description": "网络请求超时（秒）",
+    "default": 20,
+    "hint": "如果您的网络环境较差或API服务器响应慢，可以适当调高此值"
+  },
+  "command_prefix": {
+    "type": "string",
+    "description": "插件指令专属前缀",
+    "default": "-",
+    "hint": "插件将主要响应以此符号开头的指令。可以设置为空字符串''来直接响应关键词"
+  },
+  "bot_display_name": {
+    "type": "string",
+    "description": "合并转发中显示的机器人昵称",
+    "default": "Meme Bot",
+    "hint": "当插件以合并转发形式发送多张图片时，将使用此名称"
+  },
+"interactive_settings": {
+    "type": "object",
+    "description": "交互设置",
+    "items": {
+      "enabled": {
+        "type": "bool",
+        "description": "启用交互式等待",
+        "default": true,
+        "hint": "关闭后，当参数不足时，插件会直接提示而不是等待用户补充。"
+      },
+      "timeout": {
+        "type": "int",
+        "description": "等待用户补充参数的超时时间（秒）",
+        "default": 60,
+        "hint": "建议不要超过110秒"
+      },
+      "recall": {
+        "type": "object",
+        "description": "消息撤回设置",
+        "items": {
+          "enabled": {
+            "type": "bool",
+            "description": "开启后发送的提示消息将在流程结束后自动撤回。",
+            "default": false
+          }
+        }
+      },
+      "smart_reprompt": {
+        "type": "object",
+        "description": "【新】智能重提示设置",
+        "items": {
+          "enabled": {
+            "type": "bool",
+            "description": "是否在用户连续发送无效输入后主动提醒",
+            "default": false,
+            "hint": "开启后，当用户连续发送无效类型的输入达到下方阈值时，会主动提醒。"
+          },
+          "threshold": {
+            "type": "int",
+            "description": "触发重提示的无效输入次数",
+            "default": 2,
+            "hint": "用户连续发送 N 次机器人当前不需要的输入类型后，触发一次提示。"
+          }
+        }
+      }
+    }
+  },
+  "multi_image_options": {
+    "type": "object",
+    "description": "多图发送策略",
+    "items": {
+      "direct_send_threshold": {
+        "type": "int",
+        "description": "直接发送图片数量阈值",
+        "default": 3,
+        "hint": "图片数 <= 此值时，直接发送（多图消息）"
+      },
+      "send_forward_msg": {
+        "type": "bool",
+        "description": "启用合并转发",
+        "default": true,
+        "hint": "图片数 > 直接发送阈值时，是否使用合并转发"
+      },
+      "send_as_zip_enabled": {
+        "type": "bool",
+        "description": "【新】启用压缩包发送",
+        "default": true,
+        "hint": "当图片数量超过下方设定的压缩包阈值时，是否打包成 .zip 文件发送"
+      },
+      "zip_threshold": {
+        "type": "int",
+        "description": "【新】压缩包发送阈值",
+        "default": 20,
+        "hint": "图片数 > 此值时，触发压缩包发送（需启用开关）"
+      },
+      "zip_use_base64": {
+        "type": "bool",
+        "description": "【新】使用 Base64 方式发送ZIP包",
+        "default": false,
+        "hint": "兼容性最高的方式。推荐在 Docker 或分布式部署时开启。若Bot与协议端在同一文件系统下，可关闭以提升性能。"
+      }
+    }
+  },
+  "use_sender_when_no_image": {
+    "type": "bool",
+    "description": "自动使用发送者头像",
+    "default": true,
+    "hint": "当所需图片不足时，是否自动使用发送者的头像作为补充"
+  },
+  "fuzzy_match": {
+    "type": "bool",
+    "description": "启用表情关键词模糊匹配",
+    "default": true,
+    "hint": "例如，开启后发送“-唐可 可”也能触发“唐可可”表情"
+  },
+  "label_settings": {
+    "type": "object",
+    "description": "表情列表标签设置",
+    "items": {
+      "label_new_days": {
+        "type": "int",
+        "description": "“新”表情标签显示天数",
+        "default": 7,
+        "hint": "创建时间在 N 天内的表情会显示'新'标签"
+      },
+      "label_hot_days": {
+        "type": "int",
+        "description": "“热门”表情统计周期（天）",
+        "default": 30,
+        "hint": "统计过去 N 天内表情的使用次数来判断是否热门"
+      },
+      "label_hot_threshold": {
+        "type": "int",
+        "description": "“热门”表情使用次数阈值",
+        "default": 20,
+        "hint": "在统计周期内，使用次数超过 N 次的表情会显示'热门'标签"
+      }
+    }
+  },
+  "perms": {
+    "type": "object",
+    "description": "管理指令权限配置",
+    "items": {
+      "handle_refresh_memes": {
+        "type": "string",
+        "description": "刷新表情 指令权限",
+        "default": "超管",
+        "options": ["超管", "群主", "管理员"]
+      },
+      "handle_disable_meme": {
+        "type": "string",
+        "description": "禁用表情 指令权限",
+        "default": "管理员",
+        "options": ["超管", "群主", "管理员"]
+      },
+      "handle_enable_meme": {
+        "type": "string",
+        "description": "启用表情 指令权限",
+        "default": "管理员",
+        "options": ["超管", "群主", "管理员"]
+      },
+      "handle_manager_list": {
+        "type": "string",
+        "description": "管理列表 指令权限",
+        "default": "超管",
+        "options": ["超管", "群主", "管理员"]
+      },
+      "handle_group_admin_manager": {
+        "type": "string",
+        "description": "群管理员 指令权限",
+        "default": "超管",
+        "options": ["超管"]
+      },
+      "handle_global_disable_meme": {
+        "type": "string",
+        "description": "全局禁用表情 指令权限",
+        "default": "超管",
+        "options": ["超管"]
+      },
+      "handle_global_enable_meme": {
+        "type": "string",
+        "description": "全局启用表情 指令权限",
+        "default": "超管",
+        "options": ["超管"]
+      }
+    }
+  }
+}
