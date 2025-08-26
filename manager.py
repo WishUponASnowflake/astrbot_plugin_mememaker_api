@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/manager.py (性能优化版)
-
 import re
 from typing import Dict, Any, List, Optional, Set, Tuple
 
@@ -16,6 +14,7 @@ class MemeManager:
         # 【优化】新增 keyword_map，作为关键词到 MemeInfo 的直接映射，实现O(1)查找
         self.keyword_map: Dict[str, MemeInfo] = {}
         self.shortcuts: List[Dict] = []
+        self.sorted_keywords: List[str] = [] # 1. 初始化用于缓存的列表
 
     async def refresh_memes(self, api_client: APIClient) -> Tuple[bool, int, int]:
         """从 API 刷新表情包数据和快捷指令"""
@@ -47,7 +46,10 @@ class MemeManager:
             self.meme_infos = meme_infos_temp
             self.keyword_map = keyword_map_temp
             self.shortcuts = shortcuts_temp
-            
+
+            # 2. 在数据刷新后，进行一次排序并缓存结果
+            self.sorted_keywords = sorted(self.keyword_map.keys(), key=len, reverse=True)
+
             meme_count = len(self.meme_infos)
             shortcut_count = len(self.shortcuts)
             logger.info(f"成功缓存 {meme_count} 个表情和 {shortcut_count} 个快捷指令。")
@@ -63,9 +65,8 @@ class MemeManager:
         if first_word in self.keyword_map:
             return first_word
         if fuzzy_match:
-            # 优化：只对关键词列表进行一次排序
-            sorted_keywords = sorted(self.keyword_map.keys(), key=len, reverse=True)
-            for keyword in sorted_keywords:
+            # 3. 直接使用预排序、已缓存的列表，不再进行实时排序
+            for keyword in self.sorted_keywords:
                 if text.startswith(keyword):
                     return keyword
         return None

@@ -1,5 +1,3 @@
-# 文件: meme_maker_api/core/utils.py
-
 from typing import List
 from astrbot.api.event import AstrMessageEvent
 import astrbot.api.message_components as Comp

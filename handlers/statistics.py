@@ -1,6 +1,5 @@
-# 文件：astrbot_plugin_meme_maker_api/handlers/statistics.py
-
 import re
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
 from typing import List
@@ -76,9 +75,12 @@ class StatisticsHandlers:
                 count += 1
             time_counts.append((key, count))
             while stop <= now: key = stop.strftime(fmt); stop += td; time_counts.append((key, 0))
-            key_counts = {}; [key_counts.update({key: key_counts.get(key, 0) + 1}) for key in meme_keys]
+            
+            # 【核心优化】使用 Counter 一行代码完成高效计数
+            key_counts = Counter(meme_keys)
             
             yield event.plain_result("正在生成统计图，请稍候...")
+            
             if meme_info:
                 title = f"“{meme_info.key}”{scope_text}{humanized}调用统计 (总计: {len(records)})"
                 chart_data = await self.api_client.render_statistics(title, "time_count", time_counts)

@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/recorder.py (最终懒加载版)
-
 import asyncio
 import aiosqlite
 from astrbot.api import logger

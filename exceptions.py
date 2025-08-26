@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/exceptions.py (修正版)
-
 from argparse import ArgumentParser
 
 class ArgParseError(Exception):

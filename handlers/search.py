@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/handlers/search.py
-
 from typing import List
 
 from astrbot.api.event import AstrMessageEvent

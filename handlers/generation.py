@@ -1,4 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/handlers/generation.py
 import re
 import io
 import time
@@ -9,12 +8,12 @@ import asyncio
 import zipfile
 import filetype
 import tempfile
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional, Union, AsyncGenerator
 from datetime import datetime
 
 from argparse import ArgumentError
 import astrbot.api.message_components as Comp
-from astrbot.api.event import AstrMessageEvent, MessageChain
+from astrbot.api.event import AstrMessageEvent, MessageChain, MessageEventResult
 from astrbot.api import logger
 from astrbot.core.utils.session_waiter import SessionFilter
 
@@ -32,10 +31,92 @@ class UserInGroupSessionFilter(SessionFilter):
         if group_id := event.get_group_id():
             return f"{group_id}-{event.get_sender_id()}"
         return event.get_sender_id()
-# --- 新增结束 ---
+
 
 class GenerationHandlers:
     """一个 Mixin 类，包含所有表情包生成的核心逻辑"""
+
+    # --- 【核心重构】新的、统一的发送逻辑准备函数 ---
+    async def _prepare_send_results(self, event: AstrMessageEvent, result_obj: Union[bytes, List[bytes]]) -> AsyncGenerator[MessageEventResult, None]:
+        """
+        一个私有的异步生成器，用于准备所有要发送的消息结果。
+        它包含了所有复杂的发送策略判断，但只 yield 结果，不关心最终如何发送。
+        """
+        if not result_obj:
+            yield event.plain_result("图片处理失败，未收到结果。")
+            return
+        
+        image_list = [result_obj] if isinstance(result_obj, bytes) else result_obj
+        if not image_list:
+            yield event.plain_result("图片处理失败，未收到结果。")
+            return
+
+        if len(image_list) <= self.direct_send_threshold:
+            yield event.chain_result([Comp.Image.fromBytes(img_bytes) for img_bytes in image_list])
+            return
+
+        elif self.send_as_zip_enabled and len(image_list) > self.zip_threshold:
+            yield event.plain_result(f"图片过多（{len(image_list)}张），将打包为 .zip 文件发送...")
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+                for i, img_bytes in enumerate(image_list):
+                    ext = filetype.guess_extension(img_bytes) or "png"
+                    zf.writestr(f"image_{i+1}.{ext}", img_bytes)
+            zip_buffer.seek(0)
+            
+            if event.get_platform_name() == "aiocqhttp" and hasattr(event, "bot") and event.get_group_id():
+                try:
+                    filename = f"meme_images_{int(time.time())}.zip"
+                    if self.zip_use_base64:
+                        zip_bytes = zip_buffer.getvalue()
+                        base64_str = base64.b64encode(zip_bytes).decode()
+                        file_payload = f"base64://{base64_str}"
+                        await event.bot.upload_group_file(group_id=int(event.get_group_id()), file=file_payload, name=filename)
+                    else:
+                        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+                            tmp.write(zip_buffer.getvalue())
+                            tmp_path = tmp.name
+                        try:
+                            await event.bot.upload_group_file(group_id=int(event.get_group_id()), file=tmp_path, name=filename)
+                        finally:
+                            os.remove(tmp_path)
+                except Exception as e:
+                    logger.error(f"发送zip文件失败: {e}", exc_info=True)
+                    yield event.plain_result("发送zip文件失败，请检查后台日志。")
+            else:
+                yield event.plain_result("当前平台或私聊不支持发送文件。")
+            return
+
+        elif self.send_forward_msg:
+            yield event.plain_result(f"处理完成，生成 {len(image_list)} 张图片，将以合并转发形式发送：")
+            if event.get_platform_name() == "aiocqhttp" and hasattr(event, "bot"):
+                bot_id = event.get_self_id()
+                bot_name = self.bot_name
+                messages = [{"type": "node", "data": {"name": bot_name, "uin": bot_id, "content": [{"type": "image", "data": {"file": f"base64://{base64.b64encode(img_bytes).decode()}"}}]}} for img_bytes in image_list]
+                try:
+                    if group_id := event.get_group_id():
+                        await event.bot.send_group_forward_msg(group_id=int(group_id), messages=messages)
+                    else:
+                        yield event.plain_result("私聊不支持发送合并转发，将逐条发送...")
+                        for img_bytes in image_list:
+                            yield event.chain_result([Comp.Image.fromBytes(img_bytes)])
+                            await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"发送合并转发消息失败: {e}", exc_info=True)
+                    yield event.plain_result("发送合并转发消息失败，请检查后台日志。")
+            else:
+                yield event.plain_result("当前平台不支持发送合并转发，将逐条发送...")
+                for img_bytes in image_list:
+                    yield event.chain_result([Comp.Image.fromBytes(img_bytes)])
+                    await asyncio.sleep(0.5)
+            return
+        
+        else:
+            yield event.plain_result(f"处理完成，共生成 {len(image_list)} 张图片：")
+            for img_bytes in image_list:
+                yield event.chain_result([Comp.Image.fromBytes(img_bytes)])
+                await asyncio.sleep(0.5)
+
 
     async def _send_and_record(self, event: AstrMessageEvent, text: str):
         """ (已改造) 主动发送文本提示，并根据配置决定是否记录其ID """
@@ -89,98 +170,10 @@ class GenerationHandlers:
             logger.warning(f"撤回消息 {msg_id} 失败: {e}")
 
     async def _send_results_actively(self, event: AstrMessageEvent, result_obj: Union[bytes, List[bytes]]):
-        """
-        (新) 一个使用 self.context.send_message 和 event.bot 主动发送最终结果的函数。
-        它完整地包含了直接发送、打包zip、合并转发的逻辑。
-        """
-        if not result_obj:
-            await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain("图片处理失败，未收到结果。")]))
-            return
-        
-        image_list = [result_obj] if isinstance(result_obj, bytes) else result_obj
-        if not image_list:
-            await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain("图片处理失败，未收到结果。")]))
-            return
-
-        # 策略一：直接发送
-        if len(image_list) <= self.direct_send_threshold:
-            logger.info(f"图片数量 {len(image_list)} <= 阈值 {self.direct_send_threshold}，直接发送。")
-            chain = MessageChain([Comp.Image.fromBytes(img_bytes) for img_bytes in image_list])
-            await self.context.send_message(event.unified_msg_origin, chain)
-
-        # 策略二：打包为 .zip 文件发送
-        elif self.send_as_zip_enabled and len(image_list) > self.zip_threshold:
-            logger.info(f"图片数量 {len(image_list)} > 压缩包阈值 {self.zip_threshold}，打包发送。")
-            await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain(f"图片过多（{len(image_list)}张），将打包为 .zip 文件发送...")]))
-            
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                for i, img_bytes in enumerate(image_list):
-                    ext = filetype.guess_extension(img_bytes) or "png"
-                    zf.writestr(f"image_{i+1}.{ext}", img_bytes)
-            zip_buffer.seek(0)
-            
-            if event.get_platform_name() == "aiocqhttp" and hasattr(event, "bot") and event.get_group_id():
-                try:
-                    filename = f"meme_images_{int(time.time())}.zip"
-                    if self.zip_use_base64:
-                        logger.debug("使用 Base64 方式上传ZIP文件 (from _send_results_actively)")
-                        zip_bytes = zip_buffer.getvalue()
-                        base64_str = base64.b64encode(zip_bytes).decode()
-                        file_payload = f"base64://{base64_str}"
-                        await event.bot.upload_group_file(
-                            group_id=int(event.get_group_id()), file=file_payload, name=filename
-                        )
-                    else:
-                        logger.debug("使用临时文件路径方式上传ZIP文件 (from _send_results_actively)")
-                        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-                            tmp.write(zip_buffer.getvalue())
-                            tmp_path = tmp.name
-                        try:
-                            await event.bot.upload_group_file(
-                                group_id=int(event.get_group_id()), file=tmp_path, name=filename
-                            )
-                        finally:
-                            os.remove(tmp_path)
-                except Exception as e:
-                    logger.error(f"主动发送zip文件失败: {e}", exc_info=True)
-                    await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain("发送zip文件失败，请检查后台日志。")]))
-            else:
-                await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain("当前平台或私聊不支持发送文件。")]))
-
-        # 策略三：合并转发
-        elif self.send_forward_msg:
-            logger.info(f"图片数量 {len(image_list)} > 阈值 {self.direct_send_threshold}，合并转发。")
-            await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain(f"处理完成，生成 {len(image_list)} 张图片，将以合并转发形式发送：")]))
-            
-            if event.get_platform_name() == "aiocqhttp" and hasattr(event, "bot"):
-                bot_id = event.get_self_id()
-                bot_name = self.bot_name
-                messages = [{"type": "node", "data": {"name": bot_name, "uin": bot_id, "content": [{"type": "image", "data": {"file": f"base64://{base64.b64encode(img_bytes).decode()}"}}]}} for img_bytes in image_list]
-                try:
-                    if group_id := event.get_group_id():
-                        await event.bot.send_group_forward_msg(group_id=int(group_id), messages=messages)
-                    else:
-                        await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain("私聊不支持发送合并转发，将逐条发送...")]))
-                        for chain in [MessageChain([Comp.Image.fromBytes(img)]) for img in image_list]:
-                            await self.context.send_message(event.unified_msg_origin, chain)
-                            await asyncio.sleep(0.5)
-                except Exception as e:
-                    logger.error(f"主动发送合并转发消息失败: {e}", exc_info=True)
-                    await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain("发送合并转发消息失败，请检查后台日志。")]))
-            else:
-                await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain("当前平台不支持发送合并转发，将逐条发送...")]))
-                for chain in [MessageChain([Comp.Image.fromBytes(img)]) for img in image_list]:
-                    await self.context.send_message(event.unified_msg_origin, chain)
-                    await asyncio.sleep(0.5)
-
-        # 策略四：逐条发送
-        else:
-            logger.info(f"图片数量 {len(image_list)} > 阈值 {self.direct_send_threshold}，且合并转发已禁用，逐条发送。")
-            await self.context.send_message(event.unified_msg_origin, MessageChain([Comp.Plain(f"处理完成，共生成 {len(image_list)} 张图片：")]))
-            for chain in [MessageChain([Comp.Image.fromBytes(img)]) for img in image_list]:
-                await self.context.send_message(event.unified_msg_origin, chain)
-                await asyncio.sleep(0.5)
+        """ (已简化) 主动发送器，用于后台工人 """
+        async for res in self._prepare_send_results(event, result_obj):
+            # 将 MessageEventResult 对象转换为 MessageChain 并主动发送
+            await self.context.send_message(event.unified_msg_origin, MessageChain(res.chain))
 
     async def _session_worker(self, event: AstrMessageEvent, session_id: str, meme_info: MemeInfo):
         """ 
@@ -439,127 +432,39 @@ class GenerationHandlers:
         return await self.api_client._download_image(f"http://q4.qlogo.cn/g?b=qq&nk={user_id}&s=640")
         
     async def _send_results(self, event: AstrMessageEvent, result_obj: Union[bytes, List[bytes]]):
-        if not result_obj:
-            yield event.plain_result("图片处理失败，未收到结果。")
-            return
-        
-        image_list = [result_obj] if isinstance(result_obj, bytes) else result_obj
-        if not image_list:
-            yield event.plain_result("图片处理失败，未收到结果。")
-            return
-
-        if len(image_list) <= self.direct_send_threshold:
-            logger.info(f"图片数量 {len(image_list)} <= 阈值 {self.direct_send_threshold}，直接发送。")
-            yield event.chain_result([Comp.Image.fromBytes(img_bytes) for img_bytes in image_list])
-
-        elif self.send_as_zip_enabled and len(image_list) > self.zip_threshold:
-            yield event.plain_result(f"图片过多（{len(image_list)}张），将打包为 .zip 文件发送...")
-            
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-                for i, img_bytes in enumerate(image_list):
-                    ext = filetype.guess_extension(img_bytes) or "png"
-                    zf.writestr(f"image_{i+1}.{ext}", img_bytes)
-            zip_buffer.seek(0)
-            
-            if event.get_platform_name() == "aiocqhttp" and hasattr(event, "bot") and event.get_group_id():
-                try:
-                    filename = f"meme_images_{int(time.time())}.zip"
-                    
-                    # 【核心修正】根据开关选择不同的上传方式
-                    if self.zip_use_base64:
-                        logger.debug("使用 Base64 方式上传ZIP文件 (from _send_results)")
-                        zip_bytes = zip_buffer.getvalue()
-                        base64_str = base64.b64encode(zip_bytes).decode()
-                        file_payload = f"base64://{base64_str}"
-                        await event.bot.upload_group_file(
-                            group_id=int(event.get_group_id()), file=file_payload, name=filename
-                        )
-                    else:
-                        logger.debug("使用临时文件路径方式上传ZIP文件 (from _send_results)")
-                        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
-                            tmp.write(zip_buffer.getvalue())
-                            tmp_path = tmp.name
-                        try:
-                            await event.bot.upload_group_file(
-                                group_id=int(event.get_group_id()), file=tmp_path, name=filename
-                            )
-                        finally:
-                            os.remove(tmp_path)
-                            
-                except Exception as e:
-                    logger.error(f"发送zip文件失败: {e}", exc_info=True)
-                    yield event.plain_result("发送zip文件失败，请检查后台日志。")
-            else:
-                yield event.plain_result("当前平台或私聊不支持发送文件。")
-
-        elif self.send_forward_msg:
-            logger.info(f"图片数量 {len(image_list)} > 阈值 {self.direct_send_threshold}，合并转发。")
-            yield event.plain_result(f"处理完成，生成 {len(image_list)} 张图片，将以合并转发形式发送：")
-            
-            if event.get_platform_name() == "aiocqhttp" and hasattr(event, "bot"):
-                bot_id = event.get_self_id()
-                bot_name = self.bot_name
-                messages = [
-                    {"type": "node", "data": {"name": bot_name, "uin": bot_id, "content": [{"type": "image", "data": {"file": f"base64://{base64.b64encode(img_bytes).decode()}"}}]}}
-                    for img_bytes in image_list
-                ]
-                try:
-                    # 私聊不支持合并转发，需要判断
-                    if event.get_group_id():
-                        await event.bot.send_group_forward_msg(group_id=int(event.get_group_id()), messages=messages)
-                    else:
-                        yield event.plain_result("私聊不支持发送合并转发，将逐条发送...")
-                        for img_bytes in image_list:
-                            yield event.chain_result([Comp.Image.fromBytes(img_bytes)])
-                            await asyncio.sleep(0.5)
-                except Exception as e:
-                    logger.error(f"发送合并转发消息失败: {e}", exc_info=True)
-                    yield event.plain_result("发送合并转发消息失败，请检查后台日志。")
-            else:
-                yield event.plain_result("当前平台不支持发送合并转发，将逐条发送...")
-                for img_bytes in image_list:
-                    yield event.chain_result([Comp.Image.fromBytes(img_bytes)])
-                    await asyncio.sleep(0.5)
-
-        else:
-            logger.info(f"图片数量 {len(image_list)} > 阈值 {self.direct_send_threshold}，且合并转发已禁用，逐条发送。")
-            yield event.plain_result(f"处理完成，共生成 {len(image_list)} 张图片：")
-            for img_bytes in image_list:
-                yield event.chain_result([Comp.Image.fromBytes(img_bytes)])
-                await asyncio.sleep(0.5)
+        """ (已简化) yield-based 发送器，用于图片工具 """
+        async for res in self._prepare_send_results(event, result_obj):
+            yield res
     
     async def handle_random_meme(self, event: AstrMessageEvent, arg_text: str):
         try:
             temp_meme_info = MemeInfo(key="", params=MemeParams(min_images=0, max_images=99, min_texts=0, max_texts=99), date_created=datetime.now(), keywords=[])
             initial_texts, initial_images, _ = await self.build_meme_payload(event, temp_meme_info, arg_text)
             n_images_initial, n_texts_initial = len(initial_images), len(initial_texts)
-
             final_arg_text = arg_text
             n_images_filter, n_texts_filter = n_images_initial, n_texts_initial
 
             if n_images_initial == 0 and n_texts_initial == 0:
                 logger.info("检测到无参数随机表情，启用默认文字模式")
                 n_texts_filter = 1
-                final_arg_text = "" # 无参数时，让 meme_generate_handler 自己决定是否使用默认文字
-
+                final_arg_text = "请输入文本"
+            
             await self._send_and_record(event, "正在寻找合适的表情...")
 
-            available_memes = [
-                info for info in self.meme_manager.meme_infos.values()
-                if not await self.recorder.is_meme_disabled(info.key, event.get_group_id()) and
-                    info.params.min_images <= n_images_filter <= info.params.max_images and
-                    info.params.min_texts <= n_texts_filter <= info.params.max_texts
-            ]
+            # 【核心修正】将列表推导式改为异步 for 循环
+            available_memes = []
+            for info in self.meme_manager.meme_infos.values():
+                if not await self.recorder.is_meme_disabled(info.key, event.get_group_id()):
+                    if (info.params.min_images <= n_images_filter <= info.params.max_images and
+                        info.params.min_texts <= n_texts_filter <= info.params.max_texts):
+                        available_memes.append(info)
             
             if not available_memes:
                 await self._send_and_record(event, "找不到能制作这个素材的表情...换个试试？")
                 return
 
             chosen_meme = random.choice(available_memes)
-            
-            # 直接 await 调用新的“启动器”函数
-            await self.meme_generate_handler(event, chosen_meme, final_arg_text, initial_texts=initial_texts)
+            await self.meme_generate_handler(event, chosen_meme, final_arg_text)
 
         except (ArgParseError, APIError, TimeoutError) as e:
             await self._send_and_record(event, f"出错了：{e}")

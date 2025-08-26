@@ -1,5 +1,3 @@
-# 文件：meme_maker_api/core/permission.py (最终混合版)
-
 from functools import wraps
 import inspect
 from typing import Awaitable, Callable, Any, AsyncGenerator, Dict, List, Optional, Union, cast

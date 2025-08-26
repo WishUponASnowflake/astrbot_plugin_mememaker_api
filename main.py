@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/main.py
-
 import asyncio
 import re
 import os
@@ -9,7 +7,7 @@ from typing import Dict, List, Set, Optional, Any
 
 # 核心导入
 from astrbot.api.event import filter, AstrMessageEvent
-from astrbot.api.star import Context, Star, register
+from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api import logger, AstrBotConfig
 from astrbot.core.star.filter.event_message_type import EventMessageType
 from .core.permission import PermissionManager
@@ -91,11 +89,10 @@ class MemeMakerApiPlugin(
         self.api_client = APIClient(self.api_url, self.timeout)
         self.meme_manager = MemeManager()
         
-        plugin_name = "meme_maker_api"
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))), "data", "plugin_data", plugin_name)
-        os.makedirs(data_dir, exist_ok=True)
-        self.db_path = os.path.join(data_dir, "usage_stats.db")
+        # 【核心修正】使用框架提供的标准方法获取数据目录
+        data_dir = StarTools.get_data_dir("meme_maker_api")
+        data_dir.mkdir(parents=True, exist_ok=True)  # 使用 pathlib 的方法创建目录
+        self.db_path = data_dir / "usage_stats.db"   # 使用 pathlib 的 / 运算符拼接路径
         self.recorder = StatsRecorder(self.db_path)
 
         self.recall_message_ids: Dict[str, List[str]] = {}
@@ -154,6 +151,7 @@ class MemeMakerApiPlugin(
                 event.stop_event()
                 return
 
+        event_key = None
         try:
             event_key = (event.get_session_id(), event.message_obj.message_id)
             if event_key in self.processing_events: return
@@ -205,11 +203,12 @@ class MemeMakerApiPlugin(
                         asyncio.create_task(self.meme_generate_handler(event, meme_info, cleaned_text))
                         
         finally:
-            self.processing_events.discard(event_key)
+            # 在 finally 块中，先检查 event_key 是否已被成功赋值
+            if event_key:
+                self.processing_events.discard(event_key)
 
     async def terminate(self):
         """插件卸载/停用时调用，用于释放资源"""
         await self.api_client.close()
         await self.recorder.close()
-        # --- 【核心修改】移除 napcat_session 相关代码 ---
         logger.info("MemeMakerApiPlugin 成功终止，所有连接已关闭。")

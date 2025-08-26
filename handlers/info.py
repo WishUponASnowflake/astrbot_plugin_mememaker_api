@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/handlers/info.py
-
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 

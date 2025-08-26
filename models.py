@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/models.py (最终修正版)
-
 from pydantic import BaseModel, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime

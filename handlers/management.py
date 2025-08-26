@@ -1,5 +1,3 @@
-# 文件：astrbot_plugin_meme_maker_api/handlers/management.py
-
 import asyncio
 import random
 from typing import Dict, List
