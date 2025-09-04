@@ -55,7 +55,7 @@
 ## 🌏 部署前置服务 (重要！)
 
 1.  **部署meme-generator**:
-    * **meme-generator 服务**: 本插件是 Meme-API 的前端，您必须先部署 [meme-generator](https://github.com/MemeCrafters/meme-generator)，并确保您的机器人可以访问到它的地址。
+    * **meme-generator 服务**: 本插件是 Meme-API 的前端，您必须先部署 [meme-generator-rs](https://github.com/MemeCrafters/meme-generator-rs/wiki/Docker-%E9%83%A8%E7%BD%B2)，并确保您的服务器可以访问到它的地址。meme-generator(python)版的以后再说
 
 2.  **配置插件**:
     * 启动 AstrBot，前往 WebUI -> 插件管理，找到 `meme_maker_api` 插件。
